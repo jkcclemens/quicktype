@@ -205,6 +205,29 @@ class RubyRenderer extends ConvenienceRenderer {
         );
     };
 
+    marshalsImplicitly(t: Type): boolean {
+        return matchType<boolean>(
+            t,
+            _anyType => true,
+            _nullType => true,
+            _boolType => true,
+            _integerType => true,
+            _doubleType => true,
+            _stringType => true,
+            arrayType => this.marshalsImplicitly(arrayType.items),
+            _classType => false,
+            _mapType => false,
+            _enumType => true,
+            unionType => {
+                const nullable = nullableFromUnion(unionType);
+                if (nullable !== null) {
+                    return this.marshalsImplicitly(nullable);
+                }
+                return unionType.children.every(child => this.marshalsImplicitly(child));
+            }
+        );
+    }
+
     private emitBlock(source: Sourcelike[], emit: () => void) {
         this.emitLine(source);
         this.indent(emit);
@@ -227,9 +250,16 @@ class RubyRenderer extends ConvenienceRenderer {
                     const inits: Sourcelike[][] = [];
                     this.forEachClassProperty(c, "none", (name, jsonName, p) => {
                         const dynamic = `d["${stringEscape(jsonName)}"]`;
-                        const expression: Sourcelike = p.isOptional
-                            ? [dynamic, ".nil? ? nil : ", this.fromDynamic(p.type, dynamic)]
-                            : this.fromDynamic(p.type, dynamic);
+
+                        let expression: Sourcelike;
+                        if (this.marshalsImplicitly(p.type)) {
+                            expression = dynamic;
+                        } else if (p.isOptional) {
+                            expression = [dynamic, ".nil? ? nil : ", this.fromDynamic(p.type, dynamic)];
+                        } else {
+                            expression = this.fromDynamic(p.type, dynamic);
+                        }
+
                         inits.push([[name, ": "], [expression, ","]]);
                     });
                     this.emitTable(inits);
@@ -244,10 +274,17 @@ class RubyRenderer extends ConvenienceRenderer {
                 this.indent(() => {
                     const inits: Sourcelike[][] = [];
                     this.forEachClassProperty(c, "none", (name, jsonName, p) => {
-                        const dynamic = ["self.", name];
-                        const expression: Sourcelike = p.isOptional
-                            ? [dynamic, ".nil? ? nil : ", this.toDynamic(p.type, dynamic)]
-                            : this.toDynamic(p.type, dynamic);
+                        const dynamic = ["@", name];
+
+                        let expression: Sourcelike;
+                        if (this.marshalsImplicitly(p.type)) {
+                            expression = dynamic;
+                        } else if (p.isOptional) {
+                            expression = [dynamic, ".nil? ? nil : ", this.toDynamic(p.type, dynamic)];
+                        } else {
+                            expression = this.toDynamic(p.type, dynamic);
+                        }
+
                         inits.push([[`"${stringEscape(jsonName)}"`], [" => ", expression, ","]]);
                     });
                     this.emitTable(inits);
