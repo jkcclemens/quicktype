@@ -1,6 +1,6 @@
 # To parse JSON, add 'dry-struct' and 'dry-types' gems, then:
 #
-#   let top_level = TopLevel.from_json "..."
+#   top_level = TopLevel.from_json "..."
 #
 
 require 'json'
@@ -34,14 +34,14 @@ class Evolution < Dry::Struct
 
   def self.from_json(json) self.from_dynamic(JSON.parse(json)) end
 
-  def dynamic
+  def to_dynamic
     {
-      "num"  => self.num,
-      "name" => self.name,
+      "num"  => @num,
+      "name" => @name,
     }
   end
 
-  def to_json() JSON.generate(self.dynamic) end
+  def to_json() JSON.generate(self.to_dynamic) end
 end
 
 module Weakness
@@ -89,17 +89,17 @@ class Pokemon < Dry::Struct
       num:            d["num"],
       name:           d["name"],
       img:            d["img"],
-      type:           d["type"].map { |x| x },
+      type:           d["type"],
       height:         d["height"],
       weight:         d["weight"],
       candy:          d["candy"],
-      candy_count:    d["candy_count"].nil? ? nil : d["candy_count"],
-      egg:            Types::Egg[d["egg"]],
+      candy_count:    d["candy_count"],
+      egg:            d["egg"],
       spawn_chance:   d["spawn_chance"],
       avg_spawns:     d["avg_spawns"],
       spawn_time:     d["spawn_time"],
-      multipliers:    d["multipliers"].nil? ? nil : d["multipliers"].map { |x| x },
-      weaknesses:     d["weaknesses"].map { |x| Types::Weakness[x] },
+      multipliers:    d["multipliers"],
+      weaknesses:     d["weaknesses"],
       next_evolution: d["next_evolution"].nil? ? nil : d["next_evolution"].map { |x| Evolution.from_dynamic(x) },
       prev_evolution: d["prev_evolution"].nil? ? nil : d["prev_evolution"].map { |x| Evolution.from_dynamic(x) },
     )
@@ -107,29 +107,29 @@ class Pokemon < Dry::Struct
 
   def self.from_json(json) self.from_dynamic(JSON.parse(json)) end
 
-  def dynamic
+  def to_dynamic
     {
-      "id"             => self.id,
-      "num"            => self.num,
-      "name"           => self.name,
-      "img"            => self.img,
-      "type"           => self.type.map { |x| x },
-      "height"         => self.height,
-      "weight"         => self.weight,
-      "candy"          => self.candy,
-      "candy_count"    => self.candy_count.nil? ? nil : self.candy_count,
-      "egg"            => self.egg,
-      "spawn_chance"   => self.spawn_chance,
-      "avg_spawns"     => self.avg_spawns,
-      "spawn_time"     => self.spawn_time,
-      "multipliers"    => self.multipliers.nil? ? nil : self.multipliers.map { |x| x },
-      "weaknesses"     => self.weaknesses.map { |x| x },
-      "next_evolution" => self.next_evolution.nil? ? nil : self.next_evolution.map { |x| x.dynamic },
-      "prev_evolution" => self.prev_evolution.nil? ? nil : self.prev_evolution.map { |x| x.dynamic },
+      "id"             => @id,
+      "num"            => @num,
+      "name"           => @name,
+      "img"            => @img,
+      "type"           => @type,
+      "height"         => @height,
+      "weight"         => @weight,
+      "candy"          => @candy,
+      "candy_count"    => @candy_count,
+      "egg"            => @egg,
+      "spawn_chance"   => @spawn_chance,
+      "avg_spawns"     => @avg_spawns,
+      "spawn_time"     => @spawn_time,
+      "multipliers"    => @multipliers,
+      "weaknesses"     => @weaknesses,
+      "next_evolution" => @next_evolution.nil? ? nil : @next_evolution.map { |x| x.to_dynamic },
+      "prev_evolution" => @prev_evolution.nil? ? nil : @prev_evolution.map { |x| x.to_dynamic },
     }
   end
 
-  def to_json() JSON.generate(self.dynamic) end
+  def to_json() JSON.generate(self.to_dynamic) end
 end
 
 class TopLevel < Dry::Struct
@@ -143,11 +143,11 @@ class TopLevel < Dry::Struct
 
   def self.from_json(json) self.from_dynamic(JSON.parse(json)) end
 
-  def dynamic
+  def to_dynamic
     {
-      "pokemon" => self.pokemon.map { |x| x.dynamic },
+      "pokemon" => @pokemon.map { |x| x.to_dynamic },
     }
   end
 
-  def to_json() JSON.generate(self.dynamic) end
+  def to_json() JSON.generate(self.to_dynamic) end
 end
