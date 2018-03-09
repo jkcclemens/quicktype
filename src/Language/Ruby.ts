@@ -2,15 +2,7 @@
 
 import * as _ from "lodash";
 
-import {
-    Type,
-    EnumType,
-    UnionType,
-    ClassType,
-    nullableFromUnion,
-    directlyReachableSingleNamedType,
-    matchType
-} from "../Type";
+import { Type, EnumType, ClassType, nullableFromUnion, directlyReachableSingleNamedType, matchType } from "../Type";
 import { TypeGraph } from "../TypeGraph";
 
 import { Sourcelike } from "../Source";
@@ -109,7 +101,7 @@ function memberNameStyle(original: string): string {
 }
 
 class RubyRenderer extends ConvenienceRenderer {
-    constructor(graph: TypeGraph, leadingComments: string[] | undefined, private readonly inlineUnions: boolean) {
+    constructor(graph: TypeGraph, leadingComments: string[] | undefined) {
         super(graph, leadingComments);
     }
 
@@ -242,11 +234,6 @@ class RubyRenderer extends ConvenienceRenderer {
         this.emitLine(name, " = Types::String.enum(", ...cases, ")");
     }
 
-    private classDeclaration(_c: ClassType, name: Name) {
-        // return ["Dry::Types.Instance(", name, ")"];
-        return ["Instance(", name, ")"];
-    }
-
     protected emitSourceStructure() {
         if (this.leadingComments !== undefined) {
             this.emitCommentLines(this.leadingComments);
@@ -259,9 +246,9 @@ class RubyRenderer extends ConvenienceRenderer {
             this.emitLine("include Dry::Types.module");
             this.forEachNamedType(
                 "none",
-                (c, n) => undefined,
+                (_c, _n) => undefined,
                 (e, n) => this.emitEnumDeclaration(e, n),
-                (u, n) => undefined
+                (_u, _n) => undefined
             );
         });
 
@@ -269,7 +256,7 @@ class RubyRenderer extends ConvenienceRenderer {
             "leading-and-interposing",
             (c, n) => this.emitClass(c, n),
             (e, n) => this.emitEnum(e, n),
-            (u, n) => undefined
+            (_u, _n) => undefined
         );
     }
 }
