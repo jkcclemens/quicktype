@@ -2,7 +2,7 @@
 
 import * as _ from "lodash";
 
-import { Type, EnumType, ClassType, nullableFromUnion, directlyReachableSingleNamedType, matchType } from "../Type";
+import { Type, EnumType, ClassType, nullableFromUnion, matchType } from "../Type";
 import { TypeGraph } from "../TypeGraph";
 
 import { Sourcelike, modifySource } from "../Source";
@@ -94,7 +94,7 @@ function memberNameStyle(original: string): string {
         allLowerWordStyle,
         allLowerWordStyle,
         allLowerWordStyle,
-        allUpperWordStyle,
+        allLowerWordStyle,
         "_",
         isStartCharacter
     );
@@ -133,11 +133,7 @@ class RubyRenderer extends ConvenienceRenderer {
         return new Namer("enum-cases", n => simpleNameStyle(n, true), []);
     }
 
-    protected namedTypeToNameForTopLevel(type: Type): Type | undefined {
-        return directlyReachableSingleNamedType(type);
-    }
-
-    dryType = (t: Type): Sourcelike => {
+    private dryType(t: Type): Sourcelike {
         return matchType<Sourcelike>(
             t,
             _anyType => "Types::Any",
@@ -157,9 +153,9 @@ class RubyRenderer extends ConvenienceRenderer {
                 return intercalate(" | ", children).toArray();
             }
         );
-    };
+    }
 
-    fromDynamic = (t: Type, e: Sourcelike, optional: boolean = false): Sourcelike => {
+    private fromDynamic(t: Type, e: Sourcelike, optional: boolean = false): Sourcelike {
         return matchType<Sourcelike>(
             t,
             _anyType => e,
@@ -192,9 +188,9 @@ class RubyRenderer extends ConvenienceRenderer {
                 return "raise 'implement union from_dynamic'";
             }
         );
-    };
+    }
 
-    toDynamic = (t: Type, e: Sourcelike, optional: boolean = false): Sourcelike => {
+    private toDynamic(t: Type, e: Sourcelike, optional: boolean = false): Sourcelike {
         return matchType<Sourcelike>(
             t,
             _anyType => e,
@@ -215,9 +211,9 @@ class RubyRenderer extends ConvenienceRenderer {
                 return "raise 'implement union to_dynamic'";
             }
         );
-    };
+    }
 
-    marshalsImplicitly(t: Type): boolean {
+    private marshalsImplicitly(t: Type): boolean {
         return matchType<boolean>(
             t,
             _anyType => true,
@@ -246,7 +242,7 @@ class RubyRenderer extends ConvenienceRenderer {
         this.emitLine("end");
     }
 
-    private emitClass = (c: ClassType, className: Name) => {
+    private emitClass(c: ClassType, className: Name) {
         this.emitDescription(this.descriptionForType(c));
         this.emitBlock(["class ", className, " < Dry::Struct"], () => {
             const table: Sourcelike[][] = [];
@@ -300,11 +296,11 @@ class RubyRenderer extends ConvenienceRenderer {
                 this.emitLine("}");
             });
             this.ensureBlankLine();
-            this.emitLine("def to_json() JSON.generate(to_dynamic) end");
+            this.emitLine("def to_json(options = nil) JSON.generate(to_dynamic, options) end");
         });
-    };
+    }
 
-    emitEnum = (e: EnumType, enumName: Name) => {
+    private emitEnum(e: EnumType, enumName: Name) {
         this.emitDescription(this.descriptionForType(e));
         this.emitBlock(["module ", enumName], () => {
             const table: Sourcelike[][] = [];
@@ -313,7 +309,7 @@ class RubyRenderer extends ConvenienceRenderer {
             });
             this.emitTable(table);
         });
-    };
+    }
 
     private emitEnumDeclaration(e: EnumType, name: Name) {
         const cases: Sourcelike[][] = [];
@@ -356,6 +352,23 @@ class RubyRenderer extends ConvenienceRenderer {
             (c, n) => this.emitClass(c, n),
             (e, n) => this.emitEnum(e, n),
             (_u, _n) => undefined
+        );
+
+        this.forEachTopLevel(
+            "leading-and-interposing",
+            (topLevel, name) => {
+                const self = modifySource(_.snakeCase, name);
+                this.emitBlock(["class ", name], () => {
+                    this.emitBlock(["def self.from_json(json)"], () => {
+                        this.emitLine(self, " = ", this.fromDynamic(topLevel, "JSON.parse(json)"));
+                        this.emitBlock([self, ".define_singleton_method(:to_json) do"], () => {
+                            this.emitLine("JSON.generate(", this.toDynamic(topLevel, "self"), ")");
+                        });
+                        this.emitLine(self);
+                    });
+                });
+            },
+            t => this.namedTypeToNameForTopLevel(t) === undefined
         );
     }
 }
