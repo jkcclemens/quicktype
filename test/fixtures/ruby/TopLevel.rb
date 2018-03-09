@@ -14,11 +14,11 @@ module Types
 end
 
 module Egg
-  NotInEggs = "Not in Eggs"
+  NotInEggs    = "Not in Eggs"
   OmanyteCandy = "Omanyte Candy"
-  The10KM = "10 km"
-  The2KM = "2 km"
-  The5KM = "5 km"
+  The10KM      = "10 km"
+  The2KM       = "2 km"
+  The5KM       = "5 km"
 end
 
 class Evolution < Dry::Struct
@@ -45,23 +45,23 @@ class Evolution < Dry::Struct
 end
 
 module Weakness
-  Bug = "Bug"
-  Dark = "Dark"
-  Dragon = "Dragon"
+  Bug      = "Bug"
+  Dark     = "Dark"
+  Dragon   = "Dragon"
   Electric = "Electric"
-  Fairy = "Fairy"
+  Fairy    = "Fairy"
   Fighting = "Fighting"
-  Fire = "Fire"
-  Flying = "Flying"
-  Ghost = "Ghost"
-  Grass = "Grass"
-  Ground = "Ground"
-  Ice = "Ice"
-  Poison = "Poison"
-  Psychic = "Psychic"
-  Rock = "Rock"
-  Steel = "Steel"
-  Water = "Water"
+  Fire     = "Fire"
+  Flying   = "Flying"
+  Ghost    = "Ghost"
+  Grass    = "Grass"
+  Ground   = "Ground"
+  Ice      = "Ice"
+  Poison   = "Poison"
+  Psychic  = "Psychic"
+  Rock     = "Rock"
+  Steel    = "Steel"
+  Water    = "Water"
 end
 
 class Pokemon < Dry::Struct
@@ -100,8 +100,8 @@ class Pokemon < Dry::Struct
       spawn_time:     d["spawn_time"],
       multipliers:    d["multipliers"],
       weaknesses:     d["weaknesses"],
-      next_evolution: d["next_evolution"].nil? ? nil : d["next_evolution"].map { |x| Evolution.from_dynamic(x) },
-      prev_evolution: d["prev_evolution"].nil? ? nil : d["prev_evolution"].map { |x| Evolution.from_dynamic(x) },
+      next_evolution: d["next_evolution"]&.map { |x| Evolution.from_dynamic(x) },
+      prev_evolution: d["prev_evolution"]&.map { |x| Evolution.from_dynamic(x) },
     )
   end
 
@@ -124,8 +124,8 @@ class Pokemon < Dry::Struct
       "spawn_time"     => @spawn_time,
       "multipliers"    => @multipliers,
       "weaknesses"     => @weaknesses,
-      "next_evolution" => @next_evolution.nil? ? nil : @next_evolution.map { |x| x.to_dynamic },
-      "prev_evolution" => @prev_evolution.nil? ? nil : @prev_evolution.map { |x| x.to_dynamic },
+      "next_evolution" => @next_evolution&.map { |x| x.to_dynamic },
+      "prev_evolution" => @prev_evolution&.map { |x| x.to_dynamic },
     }
   end
 
