@@ -177,7 +177,7 @@ class RubyRenderer extends ConvenienceRenderer {
                 if (nullable !== null) {
                     return [e, ".nil? ? nil : ", this.fromDynamic(nullable, e)];
                 }
-                return "FIXME";
+                return "raise 'implement union from_dynamic'";
             }
         );
     };
@@ -200,7 +200,7 @@ class RubyRenderer extends ConvenienceRenderer {
                 if (nullable !== null) {
                     return [e, ".nil? ? nil : ", this.fromDynamic(nullable, e)];
                 }
-                return "FIXME";
+                return "raise 'implement union to_dynamic'";
             }
         );
     };
