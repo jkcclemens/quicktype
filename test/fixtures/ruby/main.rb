@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 
-require './TopLevel.rb'
 require 'json'
+require './TopLevel.rb'
 
-json = File.read("sample.json")
-hash = JSON.parse(json, symbolize_names: true)
+json = File.read(ARGV[0])
 top = TopLevel.parse json
-puts top
+
+puts JSON.generate(top)
