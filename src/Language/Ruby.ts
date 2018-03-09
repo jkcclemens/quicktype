@@ -159,7 +159,7 @@ class RubyRenderer extends ConvenienceRenderer {
         );
     };
 
-    fromDynamic = (t: Type, e: Sourcelike): Sourcelike => {
+    fromDynamic = (t: Type, e: Sourcelike, optional: boolean = false): Sourcelike => {
         return matchType<Sourcelike>(
             t,
             _anyType => e,
@@ -168,10 +168,22 @@ class RubyRenderer extends ConvenienceRenderer {
             _integerType => e,
             _doubleType => e,
             _stringType => e,
-            arrayType => [e, ".map { |x| ", this.fromDynamic(arrayType.items, "x"), " }"],
-            classType => [this.nameForNamedType(classType), ".from_dynamic(", e, ")"],
-            _mapType => e, // "Types::Hash", // ["Map<String, ", this.dryType(mapType.values), ">"],
-            enumType => ["Types::", this.nameForNamedType(enumType), "[", e, "]"],
+            arrayType => [e, optional ? "&" : "", ".map { |x| ", this.fromDynamic(arrayType.items, "x"), " }"],
+            classType => {
+                const expression = [this.nameForNamedType(classType), ".from_dynamic(", e, ")"];
+                return optional ? [e, " ? ", expression, " : nil"] : expression;
+            },
+            mapType => [
+                e,
+                optional ? "&" : "",
+                ".map { |k, v| [k, ",
+                this.fromDynamic(mapType.values, "v"),
+                "] }.to_h"
+            ],
+            enumType => {
+                const expression = ["Types::", this.nameForNamedType(enumType), "[", e, "]"];
+                return optional ? [e, ".nil? ? nil : ", expression] : expression;
+            },
             unionType => {
                 const nullable = nullableFromUnion(unionType);
                 if (nullable !== null) {
@@ -182,7 +194,7 @@ class RubyRenderer extends ConvenienceRenderer {
         );
     };
 
-    toDynamic = (t: Type, e: Sourcelike): Sourcelike => {
+    toDynamic = (t: Type, e: Sourcelike, optional: boolean = false): Sourcelike => {
         return matchType<Sourcelike>(
             t,
             _anyType => e,
@@ -191,9 +203,9 @@ class RubyRenderer extends ConvenienceRenderer {
             _integerType => e,
             _doubleType => e,
             _stringType => e,
-            arrayType => [e, ".map { |x| ", this.toDynamic(arrayType.items, "x"), " }"],
-            _classType => [e, ".to_dynamic"],
-            _mapType => e, // "Types::Hash", // ["Map<String, ", this.dryType(mapType.values), ">"],
+            arrayType => [e, optional ? "&" : "", ".map { |x| ", this.toDynamic(arrayType.items, "x"), " }"],
+            _classType => [e, optional ? "&" : "", ".to_dynamic"],
+            mapType => [e, optional ? "&" : "", ".map { |k, v| [k, ", this.toDynamic(mapType.values, "v"), "] }.to_h"],
             _enumType => e,
             unionType => {
                 const nullable = nullableFromUnion(unionType);
@@ -254,10 +266,8 @@ class RubyRenderer extends ConvenienceRenderer {
                         let expression: Sourcelike;
                         if (this.marshalsImplicitly(p.type)) {
                             expression = dynamic;
-                        } else if (p.isOptional) {
-                            expression = [dynamic, ".nil? ? nil : ", this.fromDynamic(p.type, dynamic)];
                         } else {
-                            expression = this.fromDynamic(p.type, dynamic);
+                            expression = this.fromDynamic(p.type, dynamic, p.isOptional);
                         }
 
                         inits.push([[name, ": "], [expression, ","]]);
@@ -279,10 +289,8 @@ class RubyRenderer extends ConvenienceRenderer {
                         let expression: Sourcelike;
                         if (this.marshalsImplicitly(p.type)) {
                             expression = dynamic;
-                        } else if (p.isOptional) {
-                            expression = [dynamic, ".nil? ? nil : ", this.toDynamic(p.type, dynamic)];
                         } else {
-                            expression = this.toDynamic(p.type, dynamic);
+                            expression = this.toDynamic(p.type, dynamic, p.isOptional);
                         }
 
                         inits.push([[`"${stringEscape(jsonName)}"`], [" => ", expression, ","]]);
