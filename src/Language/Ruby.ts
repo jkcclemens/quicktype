@@ -5,7 +5,7 @@ import * as _ from "lodash";
 import { Type, EnumType, ClassType, nullableFromUnion, directlyReachableSingleNamedType, matchType } from "../Type";
 import { TypeGraph } from "../TypeGraph";
 
-import { Sourcelike } from "../Source";
+import { Sourcelike, modifySource } from "../Source";
 import {
     legalizeCharacters,
     splitIntoWords,
@@ -169,9 +169,32 @@ class RubyRenderer extends ConvenienceRenderer {
             _doubleType => e,
             _stringType => e,
             arrayType => [e, ".map { |x| ", this.fromDynamic(arrayType.items, "x"), " }"],
-            classType => [this.nameForNamedType(classType), ".parse(", e, ")"],
+            classType => [this.nameForNamedType(classType), ".from_dynamic(", e, ")"],
             _mapType => e, // "Types::Hash", // ["Map<String, ", this.dryType(mapType.values), ">"],
             enumType => ["Types::", this.nameForNamedType(enumType), "[", e, "]"],
+            unionType => {
+                const nullable = nullableFromUnion(unionType);
+                if (nullable !== null) {
+                    return [e, ".nil? ? nil : ", this.fromDynamic(nullable, e)];
+                }
+                return "FIXME";
+            }
+        );
+    };
+
+    toDynamic = (t: Type, e: Sourcelike): Sourcelike => {
+        return matchType<Sourcelike>(
+            t,
+            _anyType => e,
+            _nullType => e,
+            _boolType => e,
+            _integerType => e,
+            _doubleType => e,
+            _stringType => e,
+            arrayType => [e, ".map { |x| ", this.toDynamic(arrayType.items, "x"), " }"],
+            _classType => [e, ".dynamic"],
+            _mapType => e, // "Types::Hash", // ["Map<String, ", this.dryType(mapType.values), ">"],
+            _enumType => e,
             unionType => {
                 const nullable = nullableFromUnion(unionType);
                 if (nullable !== null) {
@@ -198,13 +221,12 @@ class RubyRenderer extends ConvenienceRenderer {
             });
             this.emitTable(table);
             this.ensureBlankLine();
-            this.emitBlock(["def self.parse json"], () => {
-                this.emitLine("json = JSON.parse(json) unless json.is_a?(Hash)");
+            this.emitBlock(["def self.from_dynamic(d)"], () => {
                 this.emitLine(className, ".new(");
                 this.indent(() => {
                     const inits: Sourcelike[][] = [];
                     this.forEachClassProperty(c, "none", (name, jsonName, p) => {
-                        const dynamic = `json["${stringEscape(jsonName)}"]`;
+                        const dynamic = `d["${stringEscape(jsonName)}"]`;
                         const expression: Sourcelike = p.isOptional
                             ? [dynamic, ".nil? ? nil : ", this.fromDynamic(p.type, dynamic)]
                             : this.fromDynamic(p.type, dynamic);
@@ -213,6 +235,30 @@ class RubyRenderer extends ConvenienceRenderer {
                     this.emitTable(inits);
                 });
                 this.emitLine(")");
+            });
+            this.ensureBlankLine();
+            this.emitBlock(["def self.from_json(json)"], () => {
+                this.emitLine("self.from_dynamic(JSON.parse(json))");
+            });
+            this.ensureBlankLine();
+            this.emitBlock(["def dynamic"], () => {
+                this.emitLine("{");
+                this.indent(() => {
+                    const inits: Sourcelike[][] = [];
+                    this.forEachClassProperty(c, "none", (name, jsonName, p) => {
+                        const dynamic = ["self.", name];
+                        const expression: Sourcelike = p.isOptional
+                            ? [dynamic, ".nil? ? nil : ", this.toDynamic(p.type, dynamic)]
+                            : this.toDynamic(p.type, dynamic);
+                        inits.push([[`"${stringEscape(jsonName)}"`], [" => ", expression, ","]]);
+                    });
+                    this.emitTable(inits);
+                });
+                this.emitLine("}");
+            });
+            this.ensureBlankLine();
+            this.emitBlock(["def to_json"], () => {
+                this.emitLine("JSON.generate(self.dynamic)");
             });
         });
     };
@@ -237,7 +283,17 @@ class RubyRenderer extends ConvenienceRenderer {
     protected emitSourceStructure() {
         if (this.leadingComments !== undefined) {
             this.emitCommentLines(this.leadingComments);
+        } else {
+            this.emitLine("# To parse JSON, add 'dry-struct' and 'dry-types' gems, then:");
+            this.emitLine("#");
+            this.forEachTopLevel("none", (_t, name) => {
+                this.emitLine("#   let ", modifySource(_.snakeCase, name), " = ", name, '.from_json "..."');
+            });
+            this.emitLine("#");
         }
+        this.ensureBlankLine();
+
+        this.emitLine("require 'json'");
         this.emitLine("require 'dry-types'");
         this.emitLine("require 'dry-struct'");
         this.ensureBlankLine();
