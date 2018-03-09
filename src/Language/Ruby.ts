@@ -237,9 +237,7 @@ class RubyRenderer extends ConvenienceRenderer {
                 this.emitLine(")");
             });
             this.ensureBlankLine();
-            this.emitBlock(["def self.from_json(json)"], () => {
-                this.emitLine("self.from_dynamic(JSON.parse(json))");
-            });
+            this.emitLine("def self.from_json(json) self.from_dynamic(JSON.parse(json)) end");
             this.ensureBlankLine();
             this.emitBlock(["def dynamic"], () => {
                 this.emitLine("{");
@@ -257,9 +255,7 @@ class RubyRenderer extends ConvenienceRenderer {
                 this.emitLine("}");
             });
             this.ensureBlankLine();
-            this.emitBlock(["def to_json"], () => {
-                this.emitLine("JSON.generate(self.dynamic)");
-            });
+            this.emitLine("def to_json() JSON.generate(self.dynamic) end");
         });
     };
 

@@ -32,9 +32,7 @@ class Evolution < Dry::Struct
     )
   end
 
-  def self.from_json(json)
-    self.from_dynamic(JSON.parse(json))
-  end
+  def self.from_json(json) self.from_dynamic(JSON.parse(json)) end
 
   def dynamic
     {
@@ -43,9 +41,7 @@ class Evolution < Dry::Struct
     }
   end
 
-  def to_json
-    JSON.generate(self.dynamic)
-  end
+  def to_json() JSON.generate(self.dynamic) end
 end
 
 module Weakness
@@ -109,9 +105,7 @@ class Pokemon < Dry::Struct
     )
   end
 
-  def self.from_json(json)
-    self.from_dynamic(JSON.parse(json))
-  end
+  def self.from_json(json) self.from_dynamic(JSON.parse(json)) end
 
   def dynamic
     {
@@ -135,9 +129,7 @@ class Pokemon < Dry::Struct
     }
   end
 
-  def to_json
-    JSON.generate(self.dynamic)
-  end
+  def to_json() JSON.generate(self.dynamic) end
 end
 
 class TopLevel < Dry::Struct
@@ -149,9 +141,7 @@ class TopLevel < Dry::Struct
     )
   end
 
-  def self.from_json(json)
-    self.from_dynamic(JSON.parse(json))
-  end
+  def self.from_json(json) self.from_dynamic(JSON.parse(json)) end
 
   def dynamic
     {
@@ -159,7 +149,5 @@ class TopLevel < Dry::Struct
     }
   end
 
-  def to_json
-    JSON.generate(self.dynamic)
-  end
+  def to_json() JSON.generate(self.dynamic) end
 end
