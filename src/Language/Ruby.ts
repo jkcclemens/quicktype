@@ -283,7 +283,7 @@ class RubyRenderer extends ConvenienceRenderer {
             this.emitLine("# To parse JSON, add 'dry-struct' and 'dry-types' gems, then:");
             this.emitLine("#");
             this.forEachTopLevel("none", (_t, name) => {
-                this.emitLine("#   let ", modifySource(_.snakeCase, name), " = ", name, '.from_json "..."');
+                this.emitLine("#   ", modifySource(_.snakeCase, name), " = ", name, '.from_json "..."');
             });
             this.emitLine("#");
         }
