@@ -148,7 +148,7 @@ class RubyRenderer extends ConvenienceRenderer {
             _stringType => "Types::String",
             arrayType => ["Types.Array(", this.dryType(arrayType.items), ")"],
             classType => ["Types.Instance(", this.nameForNamedType(classType), ")"],
-            _mapType => "Types::Hash", // ["Map<String, ", this.dryType(mapType.values), ">"],
+            mapType => ["Types::Hash.meta(of: ", this.dryType(mapType.values), ")"],
             enumType => ["Types::", this.nameForNamedType(enumType)],
             unionType => {
                 const nullable = nullableFromUnion(unionType);
