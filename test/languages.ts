@@ -39,11 +39,7 @@ export const CSharpLanguage: Language = {
   skipMiscJSON: false,
   skipSchema: [],
   rendererOptions: {},
-  quickTestRendererOptions: [
-    { "array-type": "list" },
-    { "csharp-version": "5" },
-    { density: "dense" }
-  ],
+  quickTestRendererOptions: [{ "array-type": "list" }, { "csharp-version": "5" }, { density: "dense" }],
   sourceFiles: ["src/Language/CSharp.ts"]
 };
 
@@ -60,11 +56,7 @@ export const JavaLanguage: Language = {
   allowMissingNull: false,
   output: "src/main/java/io/quicktype/TopLevel.java",
   topLevel: "TopLevel",
-  skipJSON: [
-    "identifiers.json",
-    "simple-identifiers.json",
-    "nst-test-suite.json"
-  ],
+  skipJSON: ["identifiers.json", "simple-identifiers.json", "nst-test-suite.json"],
   skipMiscJSON: false,
   skipSchema: ["keyword-unions.schema"], // generates classes with names that are case-insensitively equal
   rendererOptions: {},
@@ -103,12 +95,7 @@ export const GoLanguage: Language = {
   allowMissingNull: false,
   output: "quicktype.go",
   topLevel: "TopLevel",
-  skipJSON: [
-    "identifiers.json",
-    "simple-identifiers.json",
-    "blns-object.json",
-    "nst-test-suite.json"
-  ],
+  skipJSON: ["identifiers.json", "simple-identifiers.json", "blns-object.json", "nst-test-suite.json"],
   skipMiscJSON: false,
   skipSchema: [],
   rendererOptions: {},
@@ -144,9 +131,10 @@ export const ElmLanguage: Language = {
   name: "elm",
   base: "test/fixtures/elm",
   setupCommand: "rm -rf elm-stuff/build-artifacts && elm-make --yes",
-  compileCommand: process.env.CI === "true"
-    ? "sysconfcpus -n 1 elm-make Main.elm QuickType.elm --output elm.js"
-    : "elm-make Main.elm QuickType.elm --output elm.js",
+  compileCommand:
+    process.env.CI === "true"
+      ? "sysconfcpus -n 1 elm-make Main.elm QuickType.elm --output elm.js"
+      : "elm-make Main.elm QuickType.elm --output elm.js",
   runCommand(sample: string) {
     return `node ./runner.js "${sample}"`;
   },
@@ -201,11 +189,7 @@ export const SwiftLanguage: Language = {
   skipMiscJSON: false,
   skipSchema: [],
   rendererOptions: {},
-  quickTestRendererOptions: [
-    { "struct-or-class": "class" },
-    { density: "dense" },
-    { density: "normal" }
-  ],
+  quickTestRendererOptions: [{ "struct-or-class": "class" }, { density: "dense" }, { density: "normal" }],
   sourceFiles: ["src/Language/Swift.ts"]
 };
 
@@ -298,4 +282,24 @@ export const FlowLanguage: Language = {
   rendererOptions: { "explicit-unions": "yes" },
   quickTestRendererOptions: [],
   sourceFiles: ["src/Language/Flow.ts"]
+};
+
+export const KotlinLanguage: Language = {
+  name: "kotlin",
+  base: "test/fixtures/kotlin",
+  setupCommand: "touch sample.json && gradle -Pmain=main.kt",
+  compileCommand: "true",
+  runCommand(sample: string) {
+    return `cp "${sample}" sample.json && gradle -Pmain=main.kt --quiet`;
+  },
+  diffViaSchema: true,
+  allowMissingNull: true,
+  output: "TopLevel.kt",
+  topLevel: "TopLevel",
+  skipJSON: [],
+  skipSchema: [],
+  skipMiscJSON: false,
+  rendererOptions: {},
+  quickTestRendererOptions: [],
+  sourceFiles: ["src/Language/Kotlin.ts"]
 };
