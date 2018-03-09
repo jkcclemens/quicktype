@@ -299,9 +299,11 @@ class RubyRenderer extends ConvenienceRenderer {
     emitEnum = (e: EnumType, enumName: Name) => {
         this.emitDescription(this.descriptionForType(e));
         this.emitBlock(["module ", enumName], () => {
+            const table: Sourcelike[][] = [];
             this.forEachEnumCase(e, "none", (name, json) => {
-                this.emitLine(name, ` = "${stringEscape(json)}"`);
+                table.push([[name], [` = "${stringEscape(json)}"`]]);
             });
+            this.emitTable(table);
         });
     };
 
