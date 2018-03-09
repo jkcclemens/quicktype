@@ -192,7 +192,7 @@ class RubyRenderer extends ConvenienceRenderer {
             _doubleType => e,
             _stringType => e,
             arrayType => [e, ".map { |x| ", this.toDynamic(arrayType.items, "x"), " }"],
-            _classType => [e, ".dynamic"],
+            _classType => [e, ".to_dynamic"],
             _mapType => e, // "Types::Hash", // ["Map<String, ", this.dryType(mapType.values), ">"],
             _enumType => e,
             unionType => {
@@ -239,7 +239,7 @@ class RubyRenderer extends ConvenienceRenderer {
             this.ensureBlankLine();
             this.emitLine("def self.from_json(json) self.from_dynamic(JSON.parse(json)) end");
             this.ensureBlankLine();
-            this.emitBlock(["def dynamic"], () => {
+            this.emitBlock(["def to_dynamic"], () => {
                 this.emitLine("{");
                 this.indent(() => {
                     const inits: Sourcelike[][] = [];
@@ -255,7 +255,7 @@ class RubyRenderer extends ConvenienceRenderer {
                 this.emitLine("}");
             });
             this.ensureBlankLine();
-            this.emitLine("def to_json() JSON.generate(self.dynamic) end");
+            this.emitLine("def to_json() JSON.generate(self.to_dynamic) end");
         });
     };
 
