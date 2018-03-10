@@ -1,11 +1,18 @@
 "use strict";
 
 import * as _ from "lodash";
+const unicode = require("unicode-properties");
 
-import { Type, EnumType, ClassType, nullableFromUnion, matchType } from "../Type";
 import { TypeGraph } from "../TypeGraph";
-
 import { Sourcelike, modifySource } from "../Source";
+import { intercalate } from "../Support";
+import { Namer, Name } from "../Naming";
+import { ConvenienceRenderer, ForbiddenWordsInfo } from "../ConvenienceRenderer";
+import { TargetLanguage } from "../TargetLanguage";
+import { Option } from "../RendererOptions";
+
+import { Type, EnumType, ClassType, nullableFromUnion, matchType, UnionType, removeNullFromUnion } from "../Type";
+
 import {
     legalizeCharacters,
     splitIntoWords,
@@ -18,16 +25,50 @@ import {
     escapeNonPrintableMapper,
     intToHex
 } from "../Strings";
-import { intercalate } from "../Support";
 
-import { Namer, Name } from "../Naming";
-
-import { ConvenienceRenderer } from "../ConvenienceRenderer";
-
-import { TargetLanguage } from "../TargetLanguage";
-import { Option } from "../RendererOptions";
-
-const unicode = require("unicode-properties");
+const keywords = [
+    "__ENCODING__",
+    "__FILE__",
+    "__LINE__",
+    "alias",
+    "and",
+    "begin",
+    "BEGIN",
+    "break",
+    "case",
+    "class",
+    "def",
+    "defined?",
+    "do",
+    "else",
+    "elsif",
+    "end",
+    "END",
+    "ensure",
+    "false",
+    "for",
+    "if",
+    "in",
+    "module",
+    "next",
+    "nil",
+    "not",
+    "or",
+    "redo",
+    "rescue",
+    "retry",
+    "return",
+    "self",
+    "super",
+    "then",
+    "true",
+    "undef",
+    "unless",
+    "until",
+    "when",
+    "while",
+    "yield"
+];
 
 function unicodeEscape(codePoint: number): string {
     return "\\u{" + intToHex(codePoint, 0) + "}";
@@ -116,6 +157,10 @@ class RubyRenderer extends ConvenienceRenderer {
     protected topLevelNameStyle(rawName: string): string {
         return simpleNameStyle(rawName, true);
     }
+    // DifferentThingElement::schema[:string]
+    protected forbiddenForClassProperties(_c: ClassType, _classNamed: Name): ForbiddenWordsInfo {
+        return { names: keywords, includeGlobalForbidden: true };
+    }
 
     protected makeNamedTypeNamer(): Namer {
         return new Namer("types", n => simpleNameStyle(n, true), []);
@@ -125,32 +170,39 @@ class RubyRenderer extends ConvenienceRenderer {
         return new Namer("properties", memberNameStyle, []);
     }
 
-    protected makeUnionMemberNamer(): null {
-        return null;
+    protected makeUnionMemberNamer(): Namer {
+        return new Namer("properties", memberNameStyle, []);
     }
 
     protected makeEnumCaseNamer(): Namer {
         return new Namer("enum-cases", n => simpleNameStyle(n, true), []);
     }
 
-    private dryType(t: Type): Sourcelike {
+    private dryType(t: Type, isOptional: boolean = false): Sourcelike {
+        const optional = isOptional ? ".optional" : "";
         return matchType<Sourcelike>(
             t,
-            _anyType => "Types::Any",
-            _nullType => "Types::Nil",
-            _boolType => "Types::Bool",
-            _integerType => "Types::Int",
-            _doubleType => "Types::Decimal",
-            _stringType => "Types::String",
-            arrayType => ["Types.Array(", this.dryType(arrayType.items), ")"],
-            classType => ["Types.Instance(", this.nameForNamedType(classType), ")"],
-            mapType => ["Types::Hash.meta(of: ", this.dryType(mapType.values), ")"],
-            enumType => ["Types::", this.nameForNamedType(enumType)],
+            _anyType => ["Types::Any", optional],
+            _nullType => ["Types::Nil", optional],
+            _boolType => ["Types::Strict::Bool", optional],
+            _integerType => ["Types::Strict::Int", optional],
+            _doubleType => ["Types::Strict::Decimal", optional],
+            _stringType => ["Types::Strict::String", optional],
+            arrayType => ["Types.Array(", this.dryType(arrayType.items), ")", optional],
+            classType => ["Types.Instance(", this.nameForNamedType(classType), ")", optional],
+            mapType => ["Types::Strict::Hash.meta(of: ", this.dryType(mapType.values), ")", optional],
+            enumType => ["Types::", this.nameForNamedType(enumType), optional],
             unionType => {
                 const nullable = nullableFromUnion(unionType);
-                if (nullable !== null) return [this.dryType(nullable), ".optional"];
-                const children = unionType.children.map((c: Type) => this.dryType(c));
-                return intercalate(" | ", children).toArray();
+                if (nullable !== null) {
+                    return [this.dryType(nullable), ".optional"];
+                }
+                if (this.marshalsImplicitly(unionType)) {
+                    const children = unionType.children.map(child => this.dryType(child));
+                    const union = intercalate(" | ", children).toArray();
+                    return isOptional ? ["(", union, ")", optional] : union;
+                }
+                return ["Types.Instance(", this.nameForNamedType(unionType), ")", optional];
             }
         );
     }
@@ -236,7 +288,7 @@ class RubyRenderer extends ConvenienceRenderer {
         );
     }
 
-    private emitBlock(source: Sourcelike[], emit: () => void) {
+    private emitBlock(source: Sourcelike, emit: () => void) {
         this.emitLine(source);
         this.indent(emit);
         this.emitLine("end");
@@ -245,12 +297,34 @@ class RubyRenderer extends ConvenienceRenderer {
     private emitClass(c: ClassType, className: Name) {
         this.emitDescription(this.descriptionForType(c));
         this.emitBlock(["class ", className, " < Dry::Struct"], () => {
-            const table: Sourcelike[][] = [];
+            let table: Sourcelike[][] = [];
+            let count = c.properties.count();
             this.forEachClassProperty(c, "none", (name, jsonName, p) => {
-                this.emitDescription(this.descriptionForClassProperty(c, jsonName));
-                table.push([["attribute :", name, ","], [" ", this.dryType(p.type), p.isOptional ? ".optional" : ""]]);
+                const last = --count === 0;
+                const description = this.descriptionForClassProperty(c, jsonName);
+                const attribute = [
+                    ["attribute :", name, ","],
+                    [" ", this.dryType(p.type), p.isOptional ? ".optional" : ""]
+                ];
+                if (description !== undefined) {
+                    if (table.length > 0) {
+                        this.emitTable(table);
+                        table = [];
+                    }
+                    this.ensureBlankLine();
+                    this.emitDescriptionBlock(description);
+                    this.emitLine(attribute);
+                    if (!last) {
+                        this.ensureBlankLine();
+                    }
+                } else {
+                    table.push(attribute);
+                }
             });
-            this.emitTable(table);
+            if (table.length > 0) {
+                this.emitTable(table);
+            }
+
             this.ensureBlankLine();
             this.emitBlock(["def self.from_dynamic(d)"], () => {
                 this.emitLine(className, ".new(");
@@ -272,8 +346,12 @@ class RubyRenderer extends ConvenienceRenderer {
                 });
                 this.emitLine(")");
             });
+
             this.ensureBlankLine();
-            this.emitLine("def self.from_json(json) from_dynamic(JSON.parse(json)) end");
+            this.emitBlock("def self.from_json(json)", () => {
+                this.emitLine("from_dynamic(JSON.parse(json))");
+            });
+
             this.ensureBlankLine();
             this.emitBlock(["def to_dynamic"], () => {
                 this.emitLine("{");
@@ -296,7 +374,9 @@ class RubyRenderer extends ConvenienceRenderer {
                 this.emitLine("}");
             });
             this.ensureBlankLine();
-            this.emitLine("def to_json(options = nil) JSON.generate(to_dynamic, options) end");
+            this.emitBlock("def to_json(options = nil)", () => {
+                this.emitLine("JSON.generate(to_dynamic, options)");
+            });
         });
     }
 
@@ -307,6 +387,26 @@ class RubyRenderer extends ConvenienceRenderer {
             this.forEachEnumCase(e, "none", (name, json) => {
                 table.push([[name], [` = "${stringEscape(json)}"`]]);
             });
+            this.emitTable(table);
+        });
+    }
+
+    private emitUnion(u: UnionType, unionName: Name) {
+        // Implicitly marshaled unions don't get a struct container
+        if (this.marshalsImplicitly(u)) {
+            return;
+        }
+
+        this.emitDescription(this.descriptionForType(u));
+        this.emitBlock(["class ", unionName, " < Dry::Struct"], () => {
+            const table: Sourcelike[][] = [];
+            const [maybeNull, nonNulls] = removeNullFromUnion(u, true);
+            this.forEachUnionMember(u, nonNulls, "none", null, (name, t) => {
+                table.push([["attribute :", name, ", "], [this.dryType(t, true)]]);
+            });
+            if (maybeNull !== null) {
+                table.push([["attribute :", this.nameForUnionMember(u, maybeNull), ", "], [this.dryType(maybeNull)]]);
+            }
             this.emitTable(table);
         });
     }
@@ -351,7 +451,7 @@ class RubyRenderer extends ConvenienceRenderer {
             "leading-and-interposing",
             (c, n) => this.emitClass(c, n),
             (e, n) => this.emitEnum(e, n),
-            (_u, _n) => undefined
+            (u, n) => this.emitUnion(u, n)
         );
 
         this.forEachTopLevel(
