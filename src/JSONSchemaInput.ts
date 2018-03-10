@@ -39,9 +39,11 @@ type PathElement =
 const numberRegexp = new RegExp("^[0-9]+$");
 
 export class Ref {
-    static readonly root: Ref = new Ref(List([{ kind: PathElementKind.Root } as PathElement]));
+    static root(source: string): Ref {
+        return new Ref(source, List([{ kind: PathElementKind.Root } as PathElement]));
+    }
 
-    static parse(ref: any): Ref {
+    static parse(baseAddress: string, ref: any): Ref {
         if (typeof ref !== "string") {
             return panic("$ref must be a string");
         }
@@ -58,13 +60,13 @@ export class Ref {
                 elements.push({ kind: PathElementKind.KeyOrIndex, key: parts[i] });
             }
         }
-        return new Ref(List(elements));
+        return new Ref(baseAddress, List(elements));
     }
 
-    private constructor(private readonly _path: List<PathElement>) {}
+    private constructor(readonly address: string, private readonly _path: List<PathElement>) {}
 
     private pushElement(pe: PathElement): Ref {
-        return new Ref(this._path.push(pe));
+        return new Ref(this.address, this._path.push(pe));
     }
 
     push(...keys: string[]): Ref {
@@ -158,7 +160,7 @@ export class Ref {
         ): [StringMap, Ref] {
             const first = path.first();
             if (first === undefined) {
-                return [checkStringMap(local), new Ref(localPath)];
+                return [checkStringMap(local), new Ref(localRef.address, localPath)];
             }
             const rest = path.rest();
             if (first.kind === PathElementKind.Root) {
@@ -189,6 +191,36 @@ export class Ref {
         return this._path.map(pe => fromJS(pe));
     }
 }
+
+export type JSONSchema = object | boolean;
+
+export class JSONSchemaStore {
+    private _schemas: Map<string, JSONSchema> = Map();
+
+    private add(address: string, schema: JSONSchema): void {
+        assert(!this._schemas.has(address), "Cannot set a schema for an address twice");
+        this._schemas = this._schemas.set(address, schema);
+    }
+
+    protected fetch(_address: string): JSONSchema | undefined {
+        return undefined;
+    }
+
+    get(address: string): JSONSchema {
+        let schema = this._schemas.get(address);
+        if (schema !== undefined) {
+            return schema;
+        }
+        schema = this.fetch(address);
+        if (schema === undefined) {
+            return panic(`Schema at address "${address}" not available`);
+        }
+        this.add(address, schema);
+        return schema;
+    }
+}
+
+// class Normalizer {}
 
 function checkStringArray(arr: any): string[] {
     if (!Array.isArray(arr)) {
@@ -244,7 +276,12 @@ function checkTypeList(typeOrTypes: any): OrderedSet<string> {
     }
 }
 
-export function addTypesInSchema(typeBuilder: TypeGraphBuilder, rootJson: any, references: Map<string, Ref>): void {
+export function addTypesInSchema(
+    typeBuilder: TypeGraphBuilder,
+    rootJson: any,
+    rootAddress: string,
+    references: Map<string, Ref>
+): void {
     const root = checkStringMap(rootJson);
     let typeForPath = Map<List<any>, TypeRef>();
 
@@ -399,7 +436,7 @@ export function addTypesInSchema(typeBuilder: TypeGraphBuilder, rootJson: any, r
         }
 
         if (schema.$ref !== undefined) {
-            const ref = Ref.parse(schema.$ref);
+            const ref = Ref.parse(path.address, schema.$ref);
             const [target, targetPath] = ref.lookupRef(root, schema, path);
             const attributes = modifyTypeNames(typeAttributes, tn => {
                 if (!defined(tn).areInferred) return tn;
@@ -473,19 +510,19 @@ export function addTypesInSchema(typeBuilder: TypeGraphBuilder, rootJson: any, r
     }
 
     references.forEach((topLevelRef, topLevelName) => {
-        const [target, targetPath] = topLevelRef.lookupRef(root, root, Ref.root);
+        const [target, targetPath] = topLevelRef.lookupRef(root, root, Ref.root(rootAddress));
         const t = toType(target, targetPath, makeNamesTypeAttributes(topLevelName, false));
         typeBuilder.addTopLevel(topLevelName, t);
     });
 }
 
-export function definitionRefsInSchema(rootJson: any): Map<string, Ref> {
+export function definitionRefsInSchema(rootJson: any, rootAddress: string): Map<string, Ref> {
     if (typeof rootJson !== "object") return Map();
     const definitions = rootJson.definitions;
     if (typeof definitions !== "object") return Map();
     return Map(
         Object.keys(definitions).map(name => {
-            return [name, Ref.root.pushDefinition(name)] as [string, Ref];
+            return [name, Ref.root(rootAddress).pushDefinition(name)] as [string, Ref];
         })
     );
 }
